@@ -1,49 +1,59 @@
-WhatsApp Xtract v2.2
+WhatsApp Xtract v2.3
 - WhatsApp Backup Messages Extractor for Android and iPhone
 
-Released on November 17th, 2012
+Released on April 25th, 2018
+
 (C)opyright 2012 Fabio Sangiacomo <fabio.sangiacomo@digital-forensics.it>
-(C)opyright 2012 Martina Weidner  <martina.weidner@freenet.ch>
+(C)opyright 2018 Martina Weidner  <martina.weidner@freenet.ch>
 Released under MIT licence
 
-Tested with Whatsapp (Android) 2.8.5732
+Tested with Whatsapp (Android) 2.18.46
 Tested with Whatsapp (iPhone)  2.5.1
 
-Last Update on November 17th, 2012 (v2.2)
 
 ------------------------
 
 HOW TO USE:
 (see also the thread at xda-dev: http://forum.xda-developers.com/showthread.php?p=24603294 )
 
-1. You need to copy the whatsapp database. 
+1. You need a copy of the whatsapp database and (if no root) get your key. 
 
-On Android, either get this file:
+a) if your Android phone is rooted:
 
-/sdcard/WhatsApp/Databases/msgstore.db.crypt
-(crypted database on SD card, can be created by starting backup from whatsapp advanced settings: settings - more - Backup Chats)
-
-or these files:
+get these files:
 /data/data/com.whatsapp/databases/msgstore.db and wa.db
-(for this you need root access. detailed instructions in the bottom of this file. the advantage is that the corresponding contact names of phone numbers will be displayed.)
+(for this you need root access. detailed instructions in the bottom of this file. 
+The advantage of having wa.db is that the corresponding contact names of phone numbers will be displayed.)
 
-On IPhone, get this file:
+b) if you have a normal Android (not rooted):
+you need this to get the key:
+[Tool] WhatsApp Key/DB Extractor | CRYPT6-12 | NON-ROOT 
+https://forum.xda-developers.com/showthread.php?t=2770982
+
+then you need the .crypt12 database from /sdcard/WhatsApp/Databases/
+
+then you need a tool like Whatsapp Viewer to decrypt the database file:
+Whatsapp Viewer
+http://andreas-mausch.de/whatsapp-viewer/
+https://forum.xda-developers.com/showthread.php?t=2719741
+
+The decrypted database can already be viewed in Whatsapp Viewer. If you want the output style from Whatsapp xtract then you can continue with the decrypted file.
+
+c) On IPhone, get this file (don't know if it still works in 2018):
 
 net.whatsapp.WhatsApp/Documents/ChatStorage.sqlite
 (You can use an Iphone Backup Tool to get the file, e.g. I-Twin or Iphone Backup Extractor. Make sure to create an unencrypted backup with Itunes, as these tools can't handle encrypted backups. Another possibility are forensic tools like UFED Physical Analyzer.)
+
 
 2. Extract this archive (Whatsapp_Xtract....zip) to a certain folder on your computer, e.g. C:\WhatsApp.
 
 3. Copy the database(s) to e.g. C:\WhatsApp (on Android, you simply copy the whole folder WhatsApp on SD card to your computer e.g. to C:\WhatsApp and then copy the database file from C:\WhatsApp\Databases to C:\WhatsApp)
 
-4. You need Python and (for Android msgstore.db.crypt decryption) the PyCrypto library
+4. You need Python
 
-The easiest way is to install ActivePython (on Windows choose 32bit version even if you have 64bit windows): 
-http://www.activestate.com/activepython/downloads
+https://www.python.org/downloads/
 
-and then run !install pyCrypto.bat (contained in this archive. The best is to rightclick on it and choose "run as administrator".)
-
-5. Now run whatsapp_xtract_android.bat or whatsapp_xtract_android_crypted.bat or whatsapp_xtract_iphone.bat 
+5. Now run whatsapp_xtract_android.bat or whatsapp_xtract_iphone.bat 
 
 OR simply drag and drop the database file(s) to whatsapp_xtract_drag'n'drop_database(s)_here.bat
 
@@ -55,22 +65,24 @@ For Android DB:
 python whatsapp_xtract.py msgstore.db -w wa.db
 OR (if wa.db is unavailable)
 python whatsapp_xtract.py msgstore.db
-OR (for crypted db)
-python whatsapp_xtract.py msgstore.db.crypt
 
 For iPhone DB: (-w option is ignored)
 python whatsapp_xtract.py ChatStorage.sqlite
 
 Once finished, your browser will open and show the chats. 
 
-The resulting file size of the .html file will be slightly bigger than the size of the .db database. 
+The resulting file size of the .html file will be slightly bigger than the size of the .db.crypt12 database. 
 
 ------------------------
 
 RECENT BUGSFIXES:
-- none
+- some
 
 CHANGELOG:
+
+v2.3 (updated by ztedd - Apr 25, 2018)
+- fixed image preview to work with new Whatsapp database format
+- some minor fixes
 
 v2.2 (updated by Martina Weidner - Nov 17, 2012)
 - now supports new emoji smileys
@@ -116,6 +128,12 @@ V1.0 (created by Fabio Sangiacomo - Dec 10, 2011)
   it takes in input the file "ChatStorage.sqlite",
   extracts chat sessions and the bare text 
 - sortable js allows table sorting to make chat sessions easily readable
+
+------------------------
+
+Wish list:
+Feel free to take the code and improve it. So maybe we could include some code from this different version which is able to export separate htmls for each chat:
+https://github.com/BurakDev/hotoloti/issues/10
 
 ------------------------
 

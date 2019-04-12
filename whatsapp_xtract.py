@@ -171,7 +171,7 @@ class Chatsession:
 class Message:
 
     # init
-    def __init__(self,pkmsg,fromme,msgdate,text,contactfrom,msgstatus,
+    def __init__(self,pkmsg,fromme,keyid,msgdate,text,contactfrom,msgstatus,
                  localurl, mediaurl,mediathumb,mediathumblocalurl,mediawatype,mediasize,latitude,longitude,vcardname,vcardstring):
 
         # if invalid params are passed, sets attributes to invalid values
@@ -180,6 +180,12 @@ class Message:
             self.pk_msg = -1
         else:
             self.pk_msg = pkmsg
+
+        # msg key id
+        if keyid == "" or keyid is None:
+            self.keyid = None
+        else:
+            self.key_id = keyid
             
         # "from me" flag
         if fromme == "" or fromme is None:
@@ -1225,12 +1231,12 @@ def filelist (type, date):
     folder = None
     flist = None
     if type == 'IMG':
-        folder = 'Media/WhatsApp Images/'
+        folder =  'Media/WhatsApp Images/'
         if not date in flistimg:
             flistimg[date] = filelistonce (folder, date)
         flist = flistimg[date]
     elif type == 'AUD':
-        folder = 'Media/WhatsApp Audio/'
+        folder =  'Media/WhatsApp Audio/'
         if not date in flistaud:
             flistaud[date] = filelistonce (folder, date)
         flist = flistaud[date]
@@ -1243,42 +1249,45 @@ def filelist (type, date):
 
 def findfile (type, size, localurl, date, additionaldays):
     fname = ''
-    if mode == ANDROID:
-        date = str(date)
-        z = 0
-        while fname == '':
-            z = z + 1
-            #use or create list of all media files of that type and that date
-            folder, flist = filelist (type, date)
-            #search the file with the given size
-            try:
-                fname = flist [0] [ flist[1].index(size) ]
-            except:
-                fname = ''          
-            if fname == '':
-                if z >= 1 + additionaldays:
-                    #if file is not found for "today", then try for "tomorrow" and "the day after tomorrow". If it's still not found, then try to find the temporary file, if not successful then just link the media folder
-                    if os.path.exists(folder+localurl):
-                        fname = folder+localurl
+    try:
+        if mode == ANDROID:
+            date = str(date)
+            z = 0
+            while fname == '':
+                z = z + 1
+                #use or create list of all media files of that type and that date
+                folder, flist = filelist (type, date)
+                #search the file with the given size
+                try:
+                    fname = flist [0] [ flist[1].index(size) ]
+                except:
+                    fname = ''          
+                if fname == '':
+                    if z >= 1 + additionaldays:
+                        #if file is not found for "today", then try for "tomorrow" and "the day after tomorrow". If it's still not found, then try to find the temporary file, if not successful then just link the media folder
+                        if os.path.exists(folder+localurl):
+                            fname = folder+localurl
+                        else:
+                            fname = folder
                     else:
-                        fname = folder
-                else:
-                    timestamptoday = int(str(time.mktime(datetime.datetime.strptime(date, "%Y%m%d").timetuple()))[:-2])
-                    timestamptomorrow = timestamptoday + 86400
-                    tomorrow = str(datetime.datetime.fromtimestamp(timestamptomorrow))[:10]
-                    tomorrow = tomorrow.replace("-","")
-                    date = tomorrow
-    elif mode == IPHONE:
-        #folder = 'Media/'
-        #if os.path.exists(localurl):
-        #    fname = localurl
-        #else:
-        #    fname = folder
-        fname = localurl
-    
+                        timestamptoday = int(str(time.mktime(datetime.datetime.strptime(date, "%Y%m%d").timetuple()))[:-2])
+                        timestamptomorrow = timestamptoday + 86400
+                        tomorrow = str(datetime.datetime.fromtimestamp(timestamptomorrow))[:10]
+                        tomorrow = tomorrow.replace("-","")
+                        date = tomorrow
+        elif mode == IPHONE:
+            #folder = 'Media/'
+            #if os.path.exists(localurl):
+            #    fname = localurl
+            #else:
+            #    fname = folder
+            fname = localurl
+    except:
+        print ("error while searching for files in " + localurl + " at date " + date)
     #return the file name
     return fname
 
+  
 ################################################################################
 ################################################################################
 # MAIN
@@ -1463,7 +1472,7 @@ def main(argv):
                     # ------------------------------------------ #
                     #  ANDROID WA.db file *** wa_contacts TABLE  #
                     # ------------------------------------------ #
-                    # chats[0] --> id (primary key)
+                    # chats[0] --> _id (primary key)
                     # chats[1] --> jid
                     # chats[2] --> is_whatsapp_user
                     # chats[3] --> is_iphone
@@ -1483,7 +1492,7 @@ def main(argv):
                         lastmessagedate = c2.fetchone()[0]
                     except: #not all contacts that are whatsapp users may already have been chatted with
                         lastmessagedate = None
-                    curr_chat = Chatsession(chats["id"],chats["display_name"],chats["jid"],None,chats["unseen_msg_count"],chats["status"],lastmessagedate)
+                    curr_chat = Chatsession(chats["_id"],chats["display_name"],chats["jid"],None,chats["unseen_msg_count"],chats["status"],lastmessagedate)
                     chat_session_list.append(curr_chat)
             else:
                 c1.execute("SELECT * FROM chat_list")
@@ -1503,6 +1512,15 @@ def main(argv):
                         lastmessagedate = None
                     curr_chat = Chatsession(chats["_id"],name,chats["key_remote_jid"],None,None,None,lastmessagedate)
                     chat_session_list.append(curr_chat)  
+            #now retrieve thumbnail database
+            try:
+                thumbsDict = {}
+                c2.execute("SELECT key_id, thumbnail FROM message_thumbnails")
+                for row in c2:
+                    thumbsDict[row["key_id"]]=row["thumbnail"]
+            except:
+                thumbs = None
+                sys.exit()
         elif mode == IPHONE:
             c1.execute("SELECT * FROM ZWACHATSESSION")
             for chats in c1:
@@ -1595,11 +1613,18 @@ def main(argv):
                             contactfrom = msgs["remote_resource"]
                         if msgs["key_from_me"] == 1:
                             contactfrom = "me"
-                        try:
-                            thumbnaildata = msgs["raw_data"]
-                        except:
-                            thumbnaildata = None
-                        curr_message = Message(msgs["_id"],msgs["key_from_me"],msgs["timestamp"],msgs["data"],contactfrom,msgs["status"],msgs["media_name"],msgs["media_url"],thumbnaildata,None,msgs["media_wa_type"],msgs["media_size"],msgs["latitude"],msgs["longitude"],None,None)
+                        thumbnaildata = None
+                        if msgs["raw_data"] is not None:
+                            try:
+                                thumbnaildata = msgs["raw_data"]
+                            except:
+                                thumbnaildata = None
+                        elif msgs["thumb_image"] is not None:
+                            try:
+                                thumbnaildata=thumbsDict[msgs["key_id"]]
+                            except:
+                                thumbnaildata = None
+                        curr_message = Message(msgs["_id"],msgs["key_from_me"],msgs["key_id"],msgs["timestamp"],msgs["data"],contactfrom,msgs["status"],msgs["media_name"],msgs["media_url"],thumbnaildata,None,msgs["media_wa_type"],msgs["media_size"],msgs["latitude"],msgs["longitude"],None,None)
                     elif mode == IPHONE:
                         #  IPHONE ChatStorage.sqlite file *** ZWACHATSESSION TABLE  #
                         # ------------------------------------------------------- #
@@ -1623,7 +1648,7 @@ def main(argv):
                         else:
                             contactfrom = msgs["ZFROMJID"]
                         if msgs["ZMEDIAITEM"] is None:
-                            curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],msgs["ZMESSAGEDATE"],msgs["ZTEXT"],contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)
+                            curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],None,msgs["ZMESSAGEDATE"],msgs["ZTEXT"],contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)
                         else:
                             try:
                                 messagetext = str(msgs["ZTEXT"])
@@ -1664,20 +1689,20 @@ def main(argv):
                                     ZXMPPTHUMBPATH = media["ZXMPPTHUMBPATH"]
                                 except:
                                     ZXMPPTHUMBPATH = None
-                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],msgs["ZMESSAGEDATE"],msgs["ZTEXT"],contactfrom,msgs["ZMESSAGESTATUS"],media["ZMEDIALOCALPATH"],media["ZMEDIAURL"],media["ZTHUMBNAILDATA"],ZXMPPTHUMBPATH,mediawatype,media["ZFILESIZE"],media["ZLATITUDE"],media["ZLONGITUDE"],media["ZVCARDNAME"],media["ZVCARDSTRING"])
+                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],None,msgs["ZMESSAGEDATE"],msgs["ZTEXT"],contactfrom,msgs["ZMESSAGESTATUS"],media["ZMEDIALOCALPATH"],media["ZMEDIAURL"],media["ZTHUMBNAILDATA"],ZXMPPTHUMBPATH,mediawatype,media["ZFILESIZE"],media["ZLATITUDE"],media["ZLONGITUDE"],media["ZVCARDNAME"],media["ZVCARDSTRING"])
                             except TypeError as msg:
                                 print('Error TypeError while reading media message #{} in chat #{}: {}'.format(count_messages, chats.pk_cs, msg) + "\nI guess this means that the media part of this message can't be found in the DB") 
-                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],msgs["ZMESSAGEDATE"],messagetext + "<br>MediaMessage_Error: see output in DOS window",contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)
+                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],None,msgs["ZMESSAGEDATE"],messagetext + "<br>MediaMessage_Error: see output in DOS window",contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)
                             except sqlite3.Error as msg:
                                 print('Error sqlite3.Error while reading media message #{} in chat #{}: {}'.format(count_messages, chats.pk_cs, msg)) 
-                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],msgs["ZMESSAGEDATE"],messagetext + "<br>MediaMessage_Error: see output in DOS window",contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)                                
+                                curr_message = Message(msgs["Z_PK"],msgs["ZISFROMME"],None,msgs["ZMESSAGEDATE"],messagetext + "<br>MediaMessage_Error: see output in DOS window",contactfrom,msgs["ZMESSAGESTATUS"],None,None,None,None,None,None,None,None,None,None)                                
 
                 except sqlite3.Error as msg:
                     print('Error while reading message #{} in chat #{}: {}'.format(count_messages, chats.pk_cs, msg)) 
-                    curr_message = Message(None,None,None,"_Error: sqlite3.Error, see output in DOS window",None,None,None,None,None,None,None,None,None,None,None,None)
+                    curr_message = Message(None,None,None,None,"_Error: sqlite3.Error, see output in DOS window",None,None,None,None,None,None,None,None,None,None,None,None)
                 except TypeError as msg:
                     print('Error while reading message #{} in chat #{}: {}'.format(count_messages, chats.pk_cs, msg)) 
-                    curr_message = Message(None,None,None,"_Error: TypeError, see output in DOS window",None,None,None,None,None,None,None,None,None,None,None,None)
+                    curr_message = Message(None,None,None,None,"_Error: TypeError, see output in DOS window",None,None,None,None,None,None,None,None,None,None,None,None)
                 chats.msg_list.append(curr_message)
 
         except sqlite3.Error as msg:
@@ -1717,7 +1742,7 @@ def main(argv):
     wfile.write('"http://www.w3.org/TR/html4/loose.dtd">\n'.encode('utf-8'))
     wfile.write('<html><head><title>{}</title>\n'.format(outfile).encode('utf-8'))
     wfile.write('<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>\n'.encode('utf-8'))
-    wfile.write('<meta name="GENERATOR" content="WhatsApp Xtract v2.0"/>\n'.encode('utf-8'))
+    wfile.write('<meta name="GENERATOR" content="WhatsApp Xtract v2.3"/>\n'.encode('utf-8'))
     # adds page style
     wfile.write(css_style.encode('utf-8'))
     
@@ -1727,9 +1752,6 @@ def main(argv):
     wfile.write(sortable.encode('utf-8'))
     wfile.write('</script>\n\n'.encode('utf-8'))
     wfile.write('</head><body>\n'.encode('utf-8'))
-
-    # H1 Title
-    wfile.write('<h1>Zena Forensics<h1>'.encode('utf-8'))
 
     # H2 DB Owner
     wfile.write('<a name="top"></a><h2>'.encode('utf-8'))
@@ -1915,79 +1937,83 @@ def main(argv):
                 date = int(date.replace("-",""))
 
             # Display Msg content (Text/Media)
-                          
-            if content_type == CONTENT_IMAGE:
-                #Search for offline file with current date (+2 days) and known media size                   
-                linkimage = findfile ("IMG", y.media_size, y.local_url, date, 2)
-                try:
-                    wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="{}"><img src="{}" alt="Image"/></a>&nbsp;|&nbsp;<a onclick="image(this.href);return(false);" target="image" href="{}">Image</a>'.format(y.media_url, y.media_thumb, linkimage).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">Bild N/A'.encode('utf-8'))
-            elif content_type == CONTENT_AUDIO:
-                #Search for offline file with current date (+2 days) and known media size                    
-                linkaudio = findfile ("AUD", y.media_size, y.local_url, date, 2)
-                try:
-                    wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}">Audio (online)</a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Audio (offline)</a>'.format(y.media_url, linkaudio).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">Audio N/A'.encode('utf-8'))
-            elif content_type == CONTENT_VIDEO:
-                #Search for offline file with current date (+2 days) and known media size
-                linkvideo = findfile ("VID", y.media_size, y.local_url, date, 2)
-                try:
-                    wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}"><img src="{}" alt="Video"/></a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Video</a>'.format(y.media_url, y.media_thumb, linkvideo).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">Video N/A'.encode('utf-8'))
-            elif content_type == CONTENT_MEDIA_THUMB:
-                #Search for offline file with current date (+2 days) and known media size                   
-                linkmedia = findfile ("MEDIA_THUMB", y.media_size, y.local_url, date, 2)
-                try:
-                    wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="{}"><img src="{}" alt="Media"/></a>&nbsp;|&nbsp;<a onclick="image(this.href);return(false);" target="image" href="{}">Media</a>'.format(y.media_url, y.media_thumb, linkmedia).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">Media N/A'.encode('utf-8'))
-            elif content_type == CONTENT_MEDIA_NOTHUMB:
-                #Search for offline file with current date (+2 days) and known media size                    
-                linkmedia = findfile ("MEDIA_NOTHUMB", y.media_size, y.local_url, date, 2)
-                try:
-                    wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}">Media (online)</a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Media (offline)</a>'.format(y.media_url, linkmedia).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">Media N/A'.encode('utf-8'))  
-            elif content_type == CONTENT_VCARD:
-                if y.vcard_name == "" or y.vcard_name is None:
-                    vcardintro = ""
-                else:
-                    vcardintro = "CONTACT: <b>" + y.vcard_name + "</b><br>\n"
-                y.vcard_string = y.vcard_string.replace ("\n", "<br>\n")
-                try:
-                    wfile.write('<td class="text">{}'.format(vcardintro + y.vcard_string).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">VCARD N/A'.encode('utf-8'))
-            elif content_type == CONTENT_GPS:
-                try:
-                    if gpsname == "" or gpsname == None:
-                        gpsname = ""
+            
+            try:              
+                if content_type == CONTENT_IMAGE:
+                    #Search for offline file with current date (+3 days) and known media size                   
+                    linkimage = findfile ("IMG", y.media_size, y.local_url, date, 3)
+                    try:
+                        wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="{}"><img src="{}" alt="Image"/></a>&nbsp;|&nbsp;<a onclick="image(this.href);return(false);" target="image" href="{}">Image</a>'.format(linkimage, y.media_thumb, y.media_url).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">Image N/A'.encode('utf-8'))
+                elif content_type == CONTENT_AUDIO:
+                    #Search for offline file with current date (+3 days) and known media size                    
+                    linkaudio = findfile ("AUD", y.media_size, y.local_url, date, 3)
+                    try:
+                        wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}">Audio (offline)</a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Audio (online)</a>'.format(linkaudio, y.media_url).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">Audio N/A'.encode('utf-8'))
+                elif content_type == CONTENT_VIDEO:
+                    #Search for offline file with current date (+3 days) and known media size
+                    linkvideo = findfile ("VID", y.media_size, y.local_url, date, 3)
+                    try:
+                        wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}"><img src="{}" alt="Video"/></a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Video</a>'.format(linkvideo, y.media_thumb, y.media_url).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">Video N/A'.encode('utf-8'))
+                elif content_type == CONTENT_MEDIA_THUMB:
+                    #Search for offline file with current date (+3 days) and known media size                   
+                    linkmedia = findfile ("MEDIA_THUMB", y.media_size, y.local_url, date, 3)
+                    try:
+                        wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="{}"><img src="{}" alt="Media"/></a>&nbsp;|&nbsp;<a onclick="image(this.href);return(false);" target="image" href="{}">Media</a>'.format(linkmedia, y.media_thumb, y.media_url).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">Media N/A'.encode('utf-8'))
+                elif content_type == CONTENT_MEDIA_NOTHUMB:
+                    #Search for offline file with current date (+3 days) and known media size                    
+                    linkmedia = findfile ("MEDIA_NOTHUMB", y.media_size, y.local_url, date, 3)
+                    try:
+                        wfile.write('<td class="text"><a onclick="media(this.href);return(false);" target="media" href="{}">Media (online)</a>&nbsp;|&nbsp;<a onclick="media(this.href);return(false);" target="media" href="{}">Media (online)</a>'.format(linkmedia, y.media_url).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">Media N/A'.encode('utf-8'))  
+                elif content_type == CONTENT_VCARD:
+                    if y.vcard_name == "" or y.vcard_name is None:
+                        vcardintro = ""
                     else:
-                        gpsname = "\n" + gpsname
-                    gpsname = gpsname.replace ("\n", "<br>\n")
-                    if y.media_thumb:
-                        wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="https://maps.google.com/?q={},{}"><img src="{}" alt="GPS"/></a>{}'.format(y.latitude, y.longitude, y.media_thumb, gpsname).encode('utf-8'))
-                    else:
-                        wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="https://maps.google.com/?q={},{}">GPS: {}, {}</a>{}'.format(y.latitude, y.longitude, y.latitude, y.longitude, gpsname).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">GPS N/A'.encode('utf-8'))
-            elif content_type == CONTENT_NEWGROUPNAME:
-                content_type = CONTENT_OTHER
-            elif content_type != CONTENT_TEXT:
-                content_type = CONTENT_OTHER
-            # End of If-Clause, now text or other type of content:
-            if content_type == CONTENT_TEXT or content_type == CONTENT_OTHER:         
-                msgtext = convertsmileys ( y.msg_text )
-                msgtext = re.sub(r'(http[^\s\n\r]+)', r'<a onclick="image(this.href);return(false);" target="image" href="\1">\1</a>', msgtext)
-                msgtext = re.sub(r'((?<!\S)www\.[^\s\n\r]+)', r'<a onclick="image(this.href);return(false);" target="image" href="http://\1">\1</a>', msgtext)
-                msgtext = msgtext.replace ("\n", "<br>\n")
-                try:
-                    wfile.write('<td class="text">{}'.format(msgtext).encode('utf-8'))
-                except:
-                    wfile.write('<td class="text">N/A'.encode('utf-8'))
+                        vcardintro = "CONTACT: <b>" + y.vcard_name + "</b><br>\n"
+                    y.vcard_string = y.vcard_string.replace ("\n", "<br>\n")
+                    try:
+                        wfile.write('<td class="text">{}'.format(vcardintro + y.vcard_string).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">VCARD N/A'.encode('utf-8'))
+                elif content_type == CONTENT_GPS:
+                    try:
+                        if gpsname == "" or gpsname == None:
+                            gpsname = ""
+                        else:
+                            gpsname = "\n" + gpsname
+                        gpsname = gpsname.replace ("\n", "<br>\n")
+                        if y.media_thumb:
+                            wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="https://maps.google.com/?q={},{}"><img src="{}" alt="GPS"/></a>{}'.format(y.latitude, y.longitude, y.media_thumb, gpsname).encode('utf-8'))
+                        else:
+                            wfile.write('<td class="text"><a onclick="image(this.href);return(false);" target="image" href="https://maps.google.com/?q={},{}">GPS: {}, {}</a>{}'.format(y.latitude, y.longitude, y.latitude, y.longitude, gpsname).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">GPS N/A'.encode('utf-8'))
+                elif content_type == CONTENT_NEWGROUPNAME:
+                    content_type = CONTENT_OTHER
+                elif content_type != CONTENT_TEXT:
+                    content_type = CONTENT_OTHER
+                # End of If-Clause, now text or other type of content:
+                if content_type == CONTENT_TEXT or content_type == CONTENT_OTHER:         
+                    msgtext = convertsmileys ( y.msg_text )
+                    msgtext = re.sub(r'(http[^\s\n\r]+)', r'<a onclick="image(this.href);return(false);" target="image" href="\1">\1</a>', msgtext)
+                    msgtext = re.sub(r'((?<!\S)www\.[^\s\n\r]+)', r'<a onclick="image(this.href);return(false);" target="image" href="http://\1">\1</a>', msgtext)
+                    msgtext = msgtext.replace ("\n", "<br>\n")
+                    try:
+                        wfile.write('<td class="text">{}'.format(msgtext).encode('utf-8'))
+                    except:
+                        wfile.write('<td class="text">N/A'.encode('utf-8'))
+            except:
+                print ("error in message id " + y.pk_msg + "(key_id: " + y.key_id + ")")
+                wfile.write('<td class="text">N/A (error in message)'.encode('utf-8'))
             # wfile.write(str(content_type)) #Debug
             wfile.write('</td>\n'.encode('utf-8'))
             
@@ -2010,7 +2036,7 @@ def main(argv):
     wfile.close()
     print ("done!")
 
-    #END
+    #END 
     webbrowser.open(outfile)            
  
 

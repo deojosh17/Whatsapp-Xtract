@@ -2,6 +2,9 @@
 ===============
 
 A copy of the script available at http://forum.xda-developers.com/showthread.php?t=1583021
+I am not the author of this script. All credit goes to the authors below.
+
+===============
 
 WhatsApp Xtract v2.3
 - WhatsApp Backup Messages Extractor for Android and iPhone

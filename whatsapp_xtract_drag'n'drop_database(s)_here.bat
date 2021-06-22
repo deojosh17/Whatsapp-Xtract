@@ -5,7 +5,7 @@ if "%~nx1"=="" goto end
 @ECHO ON
 python "%~dp0whatsapp_xtract.py" %1 -w wa.db
 @ECHO OFF
-:getfile
+:getfile-backup Chat
 shift
 if "%~nx1"=="" goto end
 @ECHO ON
